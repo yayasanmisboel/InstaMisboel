@@ -1,9 +1,23 @@
 import { usePostContext } from '../context/PostContext';
-import { Grid3x3, Settings } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Grid3x3, LogOut, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
-  const { posts, currentUser } = usePostContext();
-  const userPosts = posts.filter(post => post.userId === currentUser.id);
+  const { posts } = usePostContext();
+  const { currentUser, logout } = useAuth();
+  const navigate = useNavigate();
+  
+  const userPosts = currentUser 
+    ? posts.filter(post => post.userId === currentUser.id) 
+    : [];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  if (!currentUser) return null;
 
   return (
     <div className="pb-4">
@@ -46,6 +60,14 @@ const Profile = () => {
           </button>
           <button className="p-1.5 bg-gray-100 rounded">
             <Settings className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="p-1.5 bg-red-100 rounded" 
+            aria-label="Log out"
+            title="Log out"
+          >
+            <LogOut className="w-5 h-5 text-red-600" />
           </button>
         </div>
       </div>

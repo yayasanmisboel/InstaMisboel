@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
 
 export interface User {
   id: string;
@@ -28,20 +29,12 @@ export interface Post {
 
 interface PostContextType {
   posts: Post[];
-  currentUser: User;
   addPost: (post: Omit<Post, 'id' | 'userId' | 'username' | 'userProfilePicture' | 'likes' | 'comments' | 'timestamp'>) => void;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
 }
 
 const PostContext = createContext<PostContextType | undefined>(undefined);
-
-// Mock current user
-const mockCurrentUser: User = {
-  id: 'user-1',
-  username: 'instamisboel_official',
-  profilePicture: 'https://images.unsplash.com/photo-1505628346881-b72b27e84530?q=80&w=150&h=150&auto=format&fit=crop'
-};
 
 // Mock initial posts
 const initialPosts: Post[] = [
@@ -98,7 +91,7 @@ const initialPosts: Post[] = [
 
 export const PostProvider = ({ children }: { children: ReactNode }) => {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [currentUser] = useState<User>(mockCurrentUser);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     // Load posts from localStorage or use initial posts
@@ -119,6 +112,8 @@ export const PostProvider = ({ children }: { children: ReactNode }) => {
   }, [posts]);
 
   const addPost = (post: Omit<Post, 'id' | 'userId' | 'username' | 'userProfilePicture' | 'likes' | 'comments' | 'timestamp'>) => {
+    if (!currentUser) return;
+    
     const newPost: Post = {
       id: `post-${Date.now()}`,
       userId: currentUser.id,
@@ -134,6 +129,8 @@ export const PostProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const toggleLike = (postId: string) => {
+    if (!currentUser) return;
+    
     setPosts(prevPosts =>
       prevPosts.map(post => {
         if (post.id === postId) {
@@ -154,7 +151,7 @@ export const PostProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addComment = (postId: string, text: string) => {
-    if (!text.trim()) return;
+    if (!currentUser || !text.trim()) return;
     
     const newComment: Comment = {
       id: `comment-${Date.now()}`,
@@ -178,7 +175,7 @@ export const PostProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <PostContext.Provider value={{ posts, currentUser, addPost, toggleLike, addComment }}>
+    <PostContext.Provider value={{ posts, addPost, toggleLike, addComment }}>
       {children}
     </PostContext.Provider>
   );
