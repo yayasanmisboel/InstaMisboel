@@ -1,143 +1,191 @@
-import { useState } from 'react';
-import { usePostContext, Post as PostType } from '../context/PostContext';
-import { Bookmark, Heart, MessageCircle, Ellipsis, Send } from 'lucide-react';
-import TimeAgo from './TimeAgo';
+import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
 
-interface PostProps {
-  post: PostType;
+export interface User {
+  id: string;
+  username: string;
+  profilePicture: string;
 }
 
-const Post = ({ post }: PostProps) => {
-  const { toggleLike, addComment, currentUser } = usePostContext();
-  const [commentText, setCommentText] = useState('');
-  const [showComments, setShowComments] = useState(false);
-  
-  const isLiked = post.likes.includes(currentUser.id);
-  
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    addComment(post.id, commentText);
-    setCommentText('');
+export interface Comment {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  timestamp: number;
+}
+
+export interface Post {
+  id: string;
+  userId: string;
+  username: string;
+  userProfilePicture: string;
+  imageUrl: string;
+  caption: string;
+  likes: string[];
+  comments: Comment[];
+  timestamp: number;
+}
+
+interface PostContextType {
+  posts: Post[];
+  currentUser: User | null;
+  addPost: (post: Omit<Post, 'id' | 'userId' | 'username' | 'userProfilePicture' | 'likes' | 'comments' | 'timestamp'>) => void;
+  toggleLike: (postId: string) => void;
+  addComment: (postId: string, text: string) => void;
+}
+
+const PostContext = createContext<PostContextType | undefined>(undefined);
+
+// Mock initial posts
+const initialPosts: Post[] = [
+  {
+    id: 'post-1',
+    userId: 'user-2',
+    username: 'pet_lover',
+    userProfilePicture: 'https://images.unsplash.com/photo-1527980965255-d3b416303d12?q=80&w=150&h=150&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?q=80&w=600&auto=format&fit=crop',
+    caption: 'My cute little friend! 🐱 #cats #catlover',
+    likes: ['user-1', 'user-3'],
+    comments: [
+      {
+        id: 'comment-1',
+        userId: 'user-3',
+        username: 'catfan',
+        text: 'So adorable! 😍',
+        timestamp: Date.now() - 3600000
+      }
+    ],
+    timestamp: Date.now() - 86400000
+  },
+  {
+    id: 'post-2',
+    userId: 'user-3',
+    username: 'catfan',
+    userProfilePicture: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=150&h=150&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1526336024174-e58f5cdd8e13?q=80&w=600&auto=format&fit=crop',
+    caption: 'Afternoon nap time 💤 #catnap #sleepy',
+    likes: ['user-2'],
+    comments: [],
+    timestamp: Date.now() - 172800000
+  },
+  {
+    id: 'post-3',
+    userId: 'user-1',
+    username: 'instamisboel_official',
+    userProfilePicture: 'https://images.unsplash.com/photo-1505628346881-b72b27e84530?q=80&w=150&h=150&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1533743983669-94fa5c4338ec?q=80&w=600&auto=format&fit=crop',
+    caption: 'Welcome to Instamisboel! Share your favorite pet moments.',
+    likes: ['user-2', 'user-3'],
+    comments: [
+      {
+        id: 'comment-2',
+        userId: 'user-2',
+        username: 'pet_lover',
+        text: 'Love this app already!',
+        timestamp: Date.now() - 43200000
+      }
+    ],
+    timestamp: Date.now() - 259200000
+  }
+];
+
+export const PostProvider = ({ children }: { children: ReactNode }) => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const { currentUser } = useAuth();
+
+  useEffect(() => {
+    // Load posts from localStorage or use initial posts
+    const savedPosts = localStorage.getItem('instamisboel_posts');
+    if (savedPosts) {
+      setPosts(JSON.parse(savedPosts));
+    } else {
+      setPosts(initialPosts);
+      localStorage.setItem('instamisboel_posts', JSON.stringify(initialPosts));
+    }
+  }, []);
+
+  // Save posts to localStorage whenever they change
+  useEffect(() => {
+    if (posts.length > 0) {
+      localStorage.setItem('instamisboel_posts', JSON.stringify(posts));
+    }
+  }, [posts]);
+
+  const addPost = (post: Omit<Post, 'id' | 'userId' | 'username' | 'userProfilePicture' | 'likes' | 'comments' | 'timestamp'>) => {
+    if (!currentUser) return;
+    
+    const newPost: Post = {
+      id: `post-${Date.now()}`,
+      userId: currentUser.id,
+      username: currentUser.username,
+      userProfilePicture: currentUser.profilePicture,
+      ...post,
+      likes: [],
+      comments: [],
+      timestamp: Date.now()
+    };
+
+    setPosts(prevPosts => [newPost, ...prevPosts]);
   };
-  
-  const toggleComments = () => {
-    setShowComments(!showComments);
+
+  const toggleLike = (postId: string) => {
+    if (!currentUser) return;
+    
+    setPosts(prevPosts =>
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          const userLikedIndex = post.likes.indexOf(currentUser.id);
+          if (userLikedIndex === -1) {
+            // User hasn't liked the post yet, add like
+            return { ...post, likes: [...post.likes, currentUser.id] };
+          } else {
+            // User already liked the post, remove like
+            const newLikes = [...post.likes];
+            newLikes.splice(userLikedIndex, 1);
+            return { ...post, likes: newLikes };
+          }
+        }
+        return post;
+      })
+    );
+  };
+
+  const addComment = (postId: string, text: string) => {
+    if (!currentUser || !text.trim()) return;
+    
+    const newComment: Comment = {
+      id: `comment-${Date.now()}`,
+      userId: currentUser.id,
+      username: currentUser.username,
+      text,
+      timestamp: Date.now()
+    };
+
+    setPosts(prevPosts =>
+      prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: [...post.comments, newComment]
+          };
+        }
+        return post;
+      })
+    );
   };
 
   return (
-    <div className="border-b border-gray-200 pb-4 mb-4">
-      {/* Post header */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-full overflow-hidden">
-            <img 
-              src={post.userProfilePicture} 
-              alt={post.username} 
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <span className="font-medium text-sm">{post.username}</span>
-        </div>
-        <button aria-label="More options">
-          <Ellipsis className="w-5 h-5 text-gray-700" />
-        </button>
-      </div>
-      
-      {/* Post image */}
-      <div className="aspect-square w-full relative">
-        <img 
-          src={post.imageUrl} 
-          alt="Post" 
-          className="w-full h-full object-cover"
-        />
-      </div>
-      
-      {/* Post actions */}
-      <div className="px-4 pt-2 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => toggleLike(post.id)} 
-            aria-label={isLiked ? "Unlike post" : "Like post"}
-            className="focus:outline-none"
-          >
-            <Heart 
-              className={`w-6 h-6 ${isLiked ? 'fill-red-500 text-red-500' : 'text-black'}`} 
-            />
-          </button>
-          <button onClick={toggleComments} aria-label="Comments">
-            <MessageCircle className="w-6 h-6" />
-          </button>
-          <button aria-label="Share post">
-            <Send className="w-6 h-6" />
-          </button>
-        </div>
-        <button aria-label="Save post">
-          <Bookmark className="w-6 h-6" />
-        </button>
-      </div>
-      
-      {/* Likes */}
-      {post.likes.length > 0 && (
-        <div className="px-4 pt-2 text-sm font-semibold">
-          {post.likes.length} {post.likes.length === 1 ? 'like' : 'likes'}
-        </div>
-      )}
-      
-      {/* Caption */}
-      <div className="px-4 pt-1 text-sm">
-        <span className="font-semibold mr-1">{post.username}</span>
-        {post.caption}
-      </div>
-      
-      {/* Comments preview */}
-      {post.comments.length > 0 && !showComments && (
-        <button 
-          onClick={toggleComments}
-          className="px-4 pt-1 text-sm text-gray-500 text-left"
-        >
-          {post.comments.length > 1 
-            ? `View all ${post.comments.length} comments` 
-            : 'View 1 comment'}
-        </button>
-      )}
-      
-      {/* Comments section */}
-      {showComments && (
-        <div className="px-4 pt-2 space-y-1">
-          {post.comments.map(comment => (
-            <div key={comment.id} className="text-sm">
-              <span className="font-semibold mr-1">{comment.username}</span>
-              {comment.text}
-            </div>
-          ))}
-        </div>
-      )}
-      
-      {/* Timestamp */}
-      <div className="px-4 pt-1 text-xs text-gray-500">
-        <TimeAgo timestamp={post.timestamp} />
-      </div>
-      
-      {/* Add comment form */}
-      <form onSubmit={handleAddComment} className="flex items-center px-4 pt-3">
-        <input
-          type="text"
-          placeholder="Add a comment..."
-          className="flex-grow text-sm bg-transparent focus:outline-none"
-          value={commentText}
-          onChange={e => setCommentText(e.target.value)}
-        />
-        {commentText.trim() && (
-          <button 
-            type="submit" 
-            className="text-blue-500 font-semibold text-sm"
-          >
-            Post
-          </button>
-        )}
-      </form>
-    </div>
+    <PostContext.Provider value={{ posts, addPost, toggleLike, addComment, currentUser }}>
+      {children}
+    </PostContext.Provider>
   );
 };
 
-export default Post;
+export const usePostContext = () => {
+  const context = useContext(PostContext);
+  if (context === undefined) {
+    throw new Error('usePostContext must be used within a PostProvider');
+  }
+  return context;
+};
